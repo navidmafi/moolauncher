@@ -1,7 +1,11 @@
 package com.navidmafi.moolauncher.downloader;
 
-public interface Downloader {
+public interface IDownloader {
     void add(DownloadJob job);
+
+    int totalItems();
+
+    int remainingItems();
 
     void start();
 

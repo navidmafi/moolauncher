@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ClientLauncher {
-    public static void Launch(LaunchConfig config) throws IOException, InterruptedException {
+    public void Launch(LaunchConfig config) throws IOException, InterruptedException {
         List<String> classpathEntries = new ArrayList<>();
         Files.walk(config.librariesDir)
                 .filter(p -> p.toString().endsWith(".jar"))

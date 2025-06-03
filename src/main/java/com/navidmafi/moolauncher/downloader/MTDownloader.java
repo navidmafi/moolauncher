@@ -11,7 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MultiThreadedDownloader implements IDownloader {
+public class MTDownloader implements IDownloader {
 
     private final Queue<DownloadJob> queue = new LinkedList<>();
     private final int maxRetries;
@@ -23,7 +23,16 @@ public class MultiThreadedDownloader implements IDownloader {
     private final AtomicInteger totalFiles = new AtomicInteger(0);
     private final AtomicInteger completedFiles = new AtomicInteger(0);
 
-    public MultiThreadedDownloader(int threadCount, int maxRetries, DownloaderListener listener) {
+    public int totalItems() {
+        return totalFiles.get();
+    }
+
+    public int remainingItems() {
+        return totalFiles.get() - completedFiles.get();
+    }
+
+
+    public MTDownloader(int threadCount, int maxRetries, DownloaderListener listener) {
         if (threadCount <= 0) throw new IllegalArgumentException("threadCount must be > 0");
         if (maxRetries < 0) throw new IllegalArgumentException("maxRetries must be ≥ 0");
         if (listener == null) throw new NullPointerException("listener must not be null");
@@ -89,11 +98,21 @@ public class MultiThreadedDownloader implements IDownloader {
                 if (attempts > maxRetries) {
                     job.setState(DownloadState.FAILED);
                     listener.onError(this, e);
+                } else {
+                    try {
+                        Thread.sleep((long) Math.pow(2, attempts) * 100L); // e.g., 100ms, 200ms, 400ms...
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt(); // Restore interrupt status
+                    }
                 }
             }
         }
 
-        if (completedFiles.get() == totalFiles.get()) {
+        int finishedSoFar = completedFiles.incrementAndGet();
+        int percent = (int) ((finishedSoFar / (double) totalFiles.get()) * 100);
+        listener.onProgress(this, percent);
+
+        if (finishedSoFar == totalFiles.get()) {
             listener.onFinished(this);
         }
     }
@@ -115,7 +134,6 @@ public class MultiThreadedDownloader implements IDownloader {
         }
     }
 
-    @Override
     public void stop() {
         if (executor != null && !executor.isShutdown()) {
             executor.shutdownNow();

@@ -1,22 +1,31 @@
 package com.navidmafi.moolauncher.minecraft.api;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.navidmafi.moolauncher.AppConstants;
+import com.navidmafi.moolauncher.minecraft.Networking;
+import com.navidmafi.moolauncher.minecraft.exceptions.VersionNotFoundException;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.util.Iterator;
 
 public class VersionApi {
-    private final HttpClient http = HttpClient.newHttpClient();
 
-    public String fetchVersionJson(String version) throws IOException, InterruptedException {
-        HttpRequest req = HttpRequest.newBuilder(URI.create(AppConstants.PISTON_URL)).build();
-        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() != 200) {
-            throw new IOException("Failed to fetch version.json (HTTP " + resp.statusCode() + ")");
+    public static String getVersionJson(String version) throws IOException, InterruptedException, VersionNotFoundException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        String manifestJson = Networking.httpGetAsString(AppConstants.PISTON_URL);
+        JsonNode manifestNode = objectMapper.readTree(manifestJson);
+
+        Iterator<JsonNode> versionsIter = manifestNode.get("versions").elements();
+        String versionUrl = null;
+        while (versionsIter.hasNext()) {
+            JsonNode v = versionsIter.next();
+            if (version.equals(v.get("id").asText())) {
+                versionUrl = v.get("url").asText();
+                break;
+            }
         }
-        return resp.body();
+        if (versionUrl == null) throw new VersionNotFoundException();
+        return Networking.httpGetAsString(versionUrl);
     }
 }

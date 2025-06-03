@@ -14,10 +14,7 @@ public class OsUtils {
         return OSType.UNKNOWN;
     }
 
-    /**
-     * Minecraft-specific key to access native classifiers.
-     * Returns something like "natives-windows", "natives-linux", etc.
-     */
+
     public static String getNativeClassifier() {
         return switch (getOSType()) {
             case WINDOWS -> "natives-windows";

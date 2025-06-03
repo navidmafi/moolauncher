@@ -1,12 +1,10 @@
 package com.navidmafi.moolauncher.downloader;
 
 
-import java.io.IOException;
-
 public interface DownloaderListener {
-    void onFinished(Downloader downloader);
+    void onFinished(IDownloader downloader);
 
-    void onError(Downloader downloader, Exception exception);
+    void onError(IDownloader downloader, Exception exception);
 
-    void onProgress(Downloader downloader, int progress);
+    void onProgress(IDownloader downloader, int progress);
 }

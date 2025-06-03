@@ -20,7 +20,7 @@ dependencies {
 }
 
 application {
-    mainClass = 'com.navidmafi.moolauncher.LauncherApp'
+    mainClass = 'com.navidmafi.moolauncher.Bootstrap'
 }
 
 sourceSets {
