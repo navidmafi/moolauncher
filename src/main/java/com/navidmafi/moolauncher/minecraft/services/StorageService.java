@@ -9,7 +9,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.util.Enumeration;
+import java.util.Formatter;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -136,6 +139,25 @@ public class StorageService {
         }
     }
 
+    public static String computeSha1(Path file) throws IOException {
+        try (InputStream fis = Files.newInputStream(file);
+             DigestInputStream dis = new DigestInputStream(fis, MessageDigest.getInstance("SHA-1"))) {
+            // Read the entire file to update the digest
+            byte[] buffer = new byte[8 * 1024];
+            while (dis.read(buffer) != -1) { /* no-op */ }
+            byte[] shaBytes = dis.getMessageDigest().digest();
+
+            // Convert to hex string
+            try (Formatter formatter = new Formatter()) {
+                for (byte b : shaBytes) {
+                    formatter.format("%02x", b);
+                }
+                return formatter.toString();
+            }
+        } catch (Exception e) {
+            throw new IOException("Could not compute SHA-1", e);
+        }
+    }
     public static void extractNatives(String version) throws IOException {
         System.out.println("[*] Extracting native libraries for version " + version);
 

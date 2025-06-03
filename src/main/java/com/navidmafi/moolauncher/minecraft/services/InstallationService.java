@@ -6,6 +6,7 @@ import com.navidmafi.moolauncher.downloader.DownloadJob;
 import com.navidmafi.moolauncher.downloader.DownloaderListener;
 import com.navidmafi.moolauncher.downloader.IDownloader;
 import com.navidmafi.moolauncher.downloader.MTDownloader;
+import com.navidmafi.moolauncher.listener.InstallListener;
 import com.navidmafi.moolauncher.listener.SwingProgressListener;
 import com.navidmafi.moolauncher.minecraft.api.VersionApi;
 import com.navidmafi.moolauncher.util.OsUtils;
@@ -17,11 +18,17 @@ import java.nio.file.StandardOpenOption;
 import java.util.Iterator;
 import java.util.Map;
 
+import static com.navidmafi.moolauncher.minecraft.services.StorageService.computeSha1;
+
 public class InstallationService {
 
-    public static void installVersion(String version, SwingProgressListener listener) throws Exception {
+    public static void installVersion(
+            String version,
+            SwingProgressListener swingProgressListener,
+            InstallListener installListener
+    ) throws Exception {
 
-        listener.onProgress(0, "Preparing to install version: " + version);
+        swingProgressListener.onProgress(0, "Preparing to install version: " + version);
 
         StorageService.createDirectories(version);
 
@@ -34,21 +41,22 @@ public class InstallationService {
 
         DownloaderListener downloaderListener = new DownloaderListener() {
             public void onFinished(IDownloader downloader) {
-                listener.onProgress(100, "Extracting Native Libraries");
+                swingProgressListener.onProgress(100, "Extracting Native Libraries");
                 try {
                     StorageService.extractNatives(version);
-                    listener.onProgress(100, "Installed Native Libraries");
+                    swingProgressListener.onProgress(100, "Installed Native Libraries");
+                    installListener.onInstall();
                 } catch (IOException e) {
-                    listener.onFailure(e.getMessage());
+                    swingProgressListener.onFailure(e.getMessage());
                 }
             }
 
             public void onError(IDownloader downloader, Exception e) {
-                listener.onFailure(e.getMessage());
+                swingProgressListener.onFailure(e.getMessage());
             }
 
             public void onProgress(IDownloader downloader, int progress) {
-                listener.onProgress(progress, "Downloading " + downloader.remainingItems() + " files");
+                swingProgressListener.onProgress(progress, "Downloading " + downloader.remainingItems() + " files");
             }
         };
         IDownloader downloader = new MTDownloader(8, 5, downloaderListener);
@@ -60,8 +68,11 @@ public class InstallationService {
             throw new RuntimeException("No client JAR in version.json");
         }
         String clientJarUrl = clientNode.get("url").asText();
+        String clientSha1 = clientNode.get("sha1").asText();
         Path clientJarOut = StorageService.getVersionJarPath(version);
-        downloader.add(new DownloadJob(clientJarUrl, clientJarOut));
+        if (needsDownload(clientJarOut, clientSha1)) {
+            downloader.add(new DownloadJob(clientJarUrl, clientJarOut));
+        }
 
 
         JsonNode assetIndexNode = versionNode.path("assetIndex");
@@ -82,7 +93,9 @@ public class InstallationService {
             String assetUrl = "https://resources.download.minecraft.net/" + prefix + "/" + hash;
             Path outPath = StorageService.getAssetsDirectory()
                     .resolve("objects").resolve(prefix).resolve(hash);
-            downloader.add(new DownloadJob(assetUrl, outPath));
+            if (needsDownload(outPath, hash)) {
+                downloader.add(new DownloadJob(assetUrl, outPath));
+            }
         }
 
         for (JsonNode lib : versionNode.get("libraries")) {
@@ -110,8 +123,11 @@ public class InstallationService {
             }
             String artifactUrl = downloadsNode.get("url").asText();
             String artifactPath = downloadsNode.get("path").asText();
-            Path outPath = StorageService.getLibrariesDirectory().resolve(artifactPath);
-            downloader.add(new DownloadJob(artifactUrl, outPath));
+            String artifactSha1 = downloadsNode.get("sha1").asText();
+            Path libOutPath = StorageService.getLibrariesDirectory().resolve(artifactPath);
+            if (needsDownload(libOutPath, artifactSha1)) {
+                downloader.add(new DownloadJob(artifactUrl, libOutPath));
+            }
 
 
             JsonNode loggingNode = versionNode.path("logging").path("client");
@@ -129,14 +145,30 @@ public class InstallationService {
             if (nativeLibs != null) {
                 String nativeUrl = nativeLibs.get("url").asText();
                 String nativePath = nativeLibs.get("path").asText();
-                downloader.add(new DownloadJob(
-                        nativeUrl,
-                        StorageService.getLibrariesDirectory().resolve(nativePath)
-                ));
+                String nativeSha1 = nativeLibs.get("sha1").asText();
+                Path nativeOutPath = StorageService.getLibrariesDirectory().resolve(nativePath);
+
+                if (needsDownload(nativeOutPath, nativeSha1)) {
+                    downloader.add(new DownloadJob(nativeUrl, nativeOutPath));
+                }
             }
         }
 
         downloader.start();
 
+    }
+
+    private static boolean needsDownload(Path path, String expectedSha1) {
+        try {
+            if (Files.exists(path)) {
+                String actualSha1 = computeSha1(path);
+                return !actualSha1.equalsIgnoreCase(expectedSha1);
+            } else {
+                return true;
+            }
+        } catch (IOException e) {
+            // If something goes wrong while reading or hashing, force re-download
+            return true;
+        }
     }
 }

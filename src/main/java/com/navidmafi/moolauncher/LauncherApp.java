@@ -3,8 +3,8 @@ package com.navidmafi.moolauncher;
 import com.navidmafi.moolauncher.components.TextPrompt;
 import com.navidmafi.moolauncher.config.Config;
 import com.navidmafi.moolauncher.config.Storage;
-import com.navidmafi.moolauncher.controller.DefaultLauncherController;
-import com.navidmafi.moolauncher.controller.LauncherController;
+import com.navidmafi.moolauncher.listener.GameListener;
+import com.navidmafi.moolauncher.listener.InstallListener;
 import com.navidmafi.moolauncher.listener.SwingProgressListener;
 import com.navidmafi.moolauncher.minecraft.model.LaunchConfig;
 import com.navidmafi.moolauncher.minecraft.services.GameLaunchService;
@@ -31,15 +31,13 @@ public class LauncherApp {
     private JLabel statusLabel;
     private Config config;
 
-    private final LauncherController controller = new DefaultLauncherController();
-
 
     public LauncherApp() {
         createAndShowGUI();
-        this.config = Storage.readConfig();
     }
 
     private void createAndShowGUI() {
+        this.config = Storage.readConfig();
         initFrame();
         initComponents();
         layoutComponents();
@@ -170,7 +168,10 @@ public class LauncherApp {
         versionField.setEnabled(false);
         playButton.setEnabled(false);
 
-        SwingProgressListener listener = new SwingProgressListener(
+        this.config.username = username;
+        this.config.version = version;
+        Storage.saveConfig(config);
+        SwingProgressListener swingProgressListener = new SwingProgressListener(
                 frame,
                 progressBar,
                 statusLabel,
@@ -179,10 +180,31 @@ public class LauncherApp {
                 versionField
         );
         var launchConfig = new LaunchConfig(username,version);
+
+        var gameListener = new GameListener() {
+            @Override
+            public void onExit(int exitCode) {
+                usernameField.setEnabled(true);
+                versionField.setEnabled(true);
+                playButton.setEnabled(true);
+                swingProgressListener.onProgress(0,"Game e xited with code " + exitCode);
+            }
+        };
+        var installListener = new InstallListener() {
+            public void onInstall() {
+                try {
+                    swingProgressListener.onProgress(100,"Welcome to Minecraft.");
+                    GameLaunchService.launch(launchConfig,gameListener);
+                } catch (Exception e) {
+                    swingProgressListener.onFailure(e.getMessage());
+                }
+            }
+        };
+
         new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
-                GameLaunchService.UpdateAndLaunch(launchConfig);
+                InstallationService.installVersion(version,swingProgressListener,installListener);
                 return null;
             }
         }.execute();

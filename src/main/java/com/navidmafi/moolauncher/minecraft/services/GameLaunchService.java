@@ -12,7 +12,7 @@ import java.util.List;
 
 public class GameLaunchService {
 
-    public static void launch(LaunchConfig config) throws IOException, InterruptedException {
+    public static void launch(LaunchConfig config, GameListener gameListener) throws IOException, InterruptedException {
         List<String> classpathEntries = new ArrayList<>();
         Path mcDir = StorageService.getMCDirectory();
         Path assetsDir = StorageService.getAssetsDirectory();
@@ -56,7 +56,7 @@ public class GameLaunchService {
 
         int exitCode = proc.waitFor();
         System.out.println("[*] Minecraft exited with code " + exitCode);
-//        gameListener.onExit(exitCode);
+        gameListener.onExit(exitCode);
 
     }
 }
