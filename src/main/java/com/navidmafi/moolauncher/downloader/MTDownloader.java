@@ -11,7 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MultiThreadedDownloader implements Downloader {
+public class MultiThreadedDownloader implements IDownloader {
 
     private final Queue<DownloadJob> queue = new LinkedList<>();
     private final int maxRetries;
@@ -98,7 +98,7 @@ public class MultiThreadedDownloader implements Downloader {
         }
     }
 
-    private void downloadFile(DownloadJob job) throws IOException {
+    public static void downloadFile(DownloadJob job) throws IOException {
         URL url = new URL(job.getUrl());
 
         Files.createDirectories(job.getPath().getParent());
