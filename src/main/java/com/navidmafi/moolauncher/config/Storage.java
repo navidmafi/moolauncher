@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.util.Properties;
 
 public class Storage {
-    public void saveConfig(Config config) throws RuntimeException {
+    public  static  void saveConfig(Config config) throws RuntimeException {
         Properties props = new Properties();
         props.setProperty("username", config.username);
         props.setProperty("version", config.version);
@@ -20,7 +20,7 @@ public class Storage {
         }
     }
 
-    public Config readConfig() {
+    public static Config readConfig() {
         Properties props = new Properties();
 
         try (FileInputStream in = new FileInputStream("config.ini")) {

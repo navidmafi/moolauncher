@@ -1,4 +1,4 @@
-package com.navidmafi.moolauncher.minecraft.storage;
+package com.navidmafi.moolauncher.minecraft.services;
 
 import com.navidmafi.moolauncher.util.OsUtils;
 
@@ -13,7 +13,7 @@ import java.util.Enumeration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-public class MCStorage {
+public class StorageService {
 
     /**
      *  .minecraft

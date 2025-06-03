@@ -3,7 +3,7 @@ package com.navidmafi.moolauncher.minecraft.api;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.navidmafi.moolauncher.AppConstants;
-import com.navidmafi.moolauncher.minecraft.Networking;
+import com.navidmafi.moolauncher.minecraft.services.NetworkingService;
 import com.navidmafi.moolauncher.minecraft.exceptions.VersionNotFoundException;
 
 import java.io.IOException;
@@ -13,7 +13,7 @@ public class VersionApi {
 
     public static String getVersionJson(String version) throws IOException, InterruptedException, VersionNotFoundException {
         ObjectMapper objectMapper = new ObjectMapper();
-        String manifestJson = Networking.httpGetAsString(AppConstants.PISTON_URL);
+        String manifestJson = NetworkingService.httpGetAsString(AppConstants.PISTON_URL);
         JsonNode manifestNode = objectMapper.readTree(manifestJson);
 
         Iterator<JsonNode> versionsIter = manifestNode.get("versions").elements();
@@ -26,6 +26,6 @@ public class VersionApi {
             }
         }
         if (versionUrl == null) throw new VersionNotFoundException();
-        return Networking.httpGetAsString(versionUrl);
+        return NetworkingService.httpGetAsString(versionUrl);
     }
 }

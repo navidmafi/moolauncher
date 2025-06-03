@@ -1,10 +1,8 @@
 package com.navidmafi.moolauncher.listener;
 
-import com.navidmafi.moolauncher.util.UIProgressListener;
-
 import javax.swing.*;
 
-public class SwingProgressListener implements UIProgressListener {
+public class SwingProgressListener {
     private final JProgressBar progressBar;
     private final JLabel statusLabel;
     private final JButton playButton;
@@ -28,7 +26,6 @@ public class SwingProgressListener implements UIProgressListener {
         this.versionField = versionField;
     }
 
-    @Override
     public void onProgress(int progress, String message) {
         SwingUtilities.invokeLater(() -> {
             progressBar.setValue(progress);
@@ -36,22 +33,15 @@ public class SwingProgressListener implements UIProgressListener {
         });
     }
 
-    @Override
     public void onFailure(String errorMessage) {
         SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(frame, errorMessage, "Error", JOptionPane.ERROR_MESSAGE);
             usernameField.setEnabled(true);
             versionField.setEnabled(true);
             playButton.setEnabled(true);
-            statusLabel.setText("Idle");
+            statusLabel.setText("Failed");
             progressBar.setValue(0);
         });
     }
 
-    @Override
-    public void onFinished() {
-        SwingUtilities.invokeLater(() -> {
-            statusLabel.setText("Done");
-        });
-    }
 }

@@ -77,34 +77,24 @@ public class MTDownloader implements IDownloader {
         executor.shutdown();
     }
 
-    private void downloadWithRetries(DownloadJob job) {
+    private void downloadWithRetries(DownloadJob job) throws InterruptedException {
         int attempts = 0;
         boolean success = false;
 
         while (attempts <= maxRetries && !success) {
-            attempts++;
-            job.setState(DownloadState.DOWNLOADING);
-
             try {
                 downloadFile(job);
-                job.setState(DownloadState.DOWNLOADED);
                 success = true;
-
-                int finishedSoFar = completedFiles.incrementAndGet();
-                int percent = (int) ((finishedSoFar / (double) totalFiles.get()) * 100);
-                listener.onProgress(this, percent);
-
+                job.setState(DownloadState.DOWNLOADED);
             } catch (IOException e) {
-                if (attempts > maxRetries) {
+                if (attempts == maxRetries) {
                     job.setState(DownloadState.FAILED);
                     listener.onError(this, e);
                 } else {
-                    try {
-                        Thread.sleep((long) Math.pow(2, attempts) * 100L); // e.g., 100ms, 200ms, 400ms...
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt(); // Restore interrupt status
-                    }
+                    Thread.sleep((long) Math.pow(2, attempts) * 100L);
                 }
+            } finally {
+                attempts++;
             }
         }
 

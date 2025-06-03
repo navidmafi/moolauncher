@@ -1,4 +1,4 @@
-package com.navidmafi.moolauncher.minecraft;
+package com.navidmafi.moolauncher.minecraft.services;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,10 +6,9 @@ import com.navidmafi.moolauncher.downloader.DownloadJob;
 import com.navidmafi.moolauncher.downloader.DownloaderListener;
 import com.navidmafi.moolauncher.downloader.IDownloader;
 import com.navidmafi.moolauncher.downloader.MTDownloader;
+import com.navidmafi.moolauncher.listener.SwingProgressListener;
 import com.navidmafi.moolauncher.minecraft.api.VersionApi;
-import com.navidmafi.moolauncher.minecraft.storage.MCStorage;
 import com.navidmafi.moolauncher.util.OsUtils;
-import com.navidmafi.moolauncher.util.UIProgressListener;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,15 +17,15 @@ import java.nio.file.StandardOpenOption;
 import java.util.Iterator;
 import java.util.Map;
 
-public class Installer {
+public class InstallationService {
 
-    public static void SetupVersion(String version, UIProgressListener listener) throws Exception {
+    public static void installVersion(String version, SwingProgressListener listener) throws Exception {
 
         listener.onProgress(0, "Preparing to install version: " + version);
 
-        MCStorage.createDirectories(version);
+        StorageService.createDirectories(version);
 
-        Path versionJsonPath = MCStorage.getVersionJsonPath(version);
+        Path versionJsonPath = StorageService.getVersionJsonPath(version);
         String versionJson = VersionApi.getVersionJson(version);
         System.out.println("[Installer] downloaded: version.json");
         Files.writeString(versionJsonPath, versionJson, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -34,25 +33,20 @@ public class Installer {
 
 
         DownloaderListener downloaderListener = new DownloaderListener() {
-            @Override
             public void onFinished(IDownloader downloader) {
                 listener.onProgress(100, "Extracting Native Libraries");
                 try {
-                    MCStorage.extractNatives(version);
-                    listener.onFinished();
+                    StorageService.extractNatives(version);
+                    listener.onProgress(100, "Installed Native Libraries");
                 } catch (IOException e) {
-                    e.printStackTrace();
                     listener.onFailure(e.getMessage());
-                    throw new RuntimeException(e);
                 }
             }
 
-            @Override
-            public void onError(IDownloader downloader, Exception exception) {
-                listener.onFailure(exception.getMessage());
+            public void onError(IDownloader downloader, Exception e) {
+                listener.onFailure(e.getMessage());
             }
 
-            @Override
             public void onProgress(IDownloader downloader, int progress) {
                 listener.onProgress(progress, "Downloading " + downloader.remainingItems() + " files");
             }
@@ -66,7 +60,7 @@ public class Installer {
             throw new RuntimeException("No client JAR in version.json");
         }
         String clientJarUrl = clientNode.get("url").asText();
-        Path clientJarOut = MCStorage.getVersionJarPath(version);
+        Path clientJarOut = StorageService.getVersionJarPath(version);
         downloader.add(new DownloadJob(clientJarUrl, clientJarOut));
 
 
@@ -75,8 +69,8 @@ public class Installer {
             throw new RuntimeException("Asset index does not exist");
         }
         String assetIndexUrl = assetIndexNode.get("url").asText();
-        Path assetIndexFile = MCStorage.getAssetIndexPath(version);
-        String assetIndex = Networking.httpGetAsString(assetIndexUrl);
+        Path assetIndexFile = StorageService.getAssetIndexPath(version);
+        String assetIndex = NetworkingService.httpGetAsString(assetIndexUrl);
         Files.writeString(assetIndexFile, assetIndex, StandardOpenOption.CREATE);
 
         JsonNode assetIndexRootNode = objectMapper.readTree(assetIndex);
@@ -86,7 +80,7 @@ public class Installer {
             String hash = entry.getValue().get("hash").asText(); // 40‐char SHA1
             String prefix = hash.substring(0, 2);
             String assetUrl = "https://resources.download.minecraft.net/" + prefix + "/" + hash;
-            Path outPath = MCStorage.getAssetsDirectory()
+            Path outPath = StorageService.getAssetsDirectory()
                     .resolve("objects").resolve(prefix).resolve(hash);
             downloader.add(new DownloadJob(assetUrl, outPath));
         }
@@ -116,7 +110,7 @@ public class Installer {
             }
             String artifactUrl = downloadsNode.get("url").asText();
             String artifactPath = downloadsNode.get("path").asText();
-            Path outPath = MCStorage.getLibrariesDirectory().resolve(artifactPath);
+            Path outPath = StorageService.getLibrariesDirectory().resolve(artifactPath);
             downloader.add(new DownloadJob(artifactUrl, outPath));
 
 
@@ -125,7 +119,7 @@ public class Installer {
                 throw new RuntimeException("Logging does not exist");
             }
             String logConfigUrl = loggingNode.path("file").get("url").asText();
-            Path logConfigFile = MCStorage.getLoggingConfigPath(version);
+            Path logConfigFile = StorageService.getLoggingConfigPath(version);
             MTDownloader.downloadFile(new DownloadJob(logConfigUrl, logConfigFile));
 
 
@@ -137,7 +131,7 @@ public class Installer {
                 String nativePath = nativeLibs.get("path").asText();
                 downloader.add(new DownloadJob(
                         nativeUrl,
-                        MCStorage.getLibrariesDirectory().resolve(nativePath)
+                        StorageService.getLibrariesDirectory().resolve(nativePath)
                 ));
             }
         }

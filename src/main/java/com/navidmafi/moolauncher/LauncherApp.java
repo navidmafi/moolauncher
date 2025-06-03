@@ -6,8 +6,9 @@ import com.navidmafi.moolauncher.config.Storage;
 import com.navidmafi.moolauncher.controller.DefaultLauncherController;
 import com.navidmafi.moolauncher.controller.LauncherController;
 import com.navidmafi.moolauncher.listener.SwingProgressListener;
-import com.navidmafi.moolauncher.minecraft.LaunchConfig;
-import com.navidmafi.moolauncher.minecraft.storage.MCStorage;
+import com.navidmafi.moolauncher.minecraft.model.LaunchConfig;
+import com.navidmafi.moolauncher.minecraft.services.GameLaunchService;
+import com.navidmafi.moolauncher.minecraft.services.InstallationService;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -15,6 +16,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 
 public class LauncherApp {
 
@@ -27,13 +29,14 @@ public class LauncherApp {
     private JButton playButton;
     private JProgressBar progressBar;
     private JLabel statusLabel;
-    private Storage storage = new Storage();
+    private Config config;
 
     private final LauncherController controller = new DefaultLauncherController();
 
 
     public LauncherApp() {
         createAndShowGUI();
+        this.config = Storage.readConfig();
     }
 
     private void createAndShowGUI() {
@@ -41,7 +44,6 @@ public class LauncherApp {
         initComponents();
         layoutComponents();
         attachListeners();
-        loadConfig();
 
         frame.setVisible(true);
     }
@@ -80,6 +82,9 @@ public class LauncherApp {
 
         statusLabel = new JLabel("Idle");
         statusLabel.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
+
+        usernameField.setText(config.username);
+        versionField.setText(config.version);
     }
 
     private void layoutComponents() {
@@ -146,11 +151,6 @@ public class LauncherApp {
         playButton.addActionListener(this::onPlayClicked);
     }
 
-    private void loadConfig() {
-        Config config = storage.readConfig();
-        usernameField.setText(config.username);
-        versionField.setText(config.version);
-    }
 
     private void onPlayClicked(ActionEvent e) {
         String username = usernameField.getText().trim();
@@ -178,16 +178,12 @@ public class LauncherApp {
                 usernameField,
                 versionField
         );
+        var launchConfig = new LaunchConfig(username,version);
         new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
-                controller.launchOrInstall(username, version, listener);
+                GameLaunchService.UpdateAndLaunch(launchConfig);
                 return null;
-            }
-
-            @Override
-            protected void done() {
-                // Optional: handle success or failure, re-enable fields, etc.
             }
         }.execute();
 
