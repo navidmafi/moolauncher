@@ -3,7 +3,16 @@ package com.navidmafi.moolauncher.minecraft.services;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-public class MavenUrlMapper {
+public class MavenService {
+    public static String stripVersion(String coordinate) {
+        String[] parts = coordinate.split(":");
+        if (parts.length < 2) {
+            throw new IllegalArgumentException("Invalid coordinate: " + coordinate);
+        }
+        return parts[0] + ":" + parts[1];
+    }
+
+
     public static String toMavenUrl(String coords, String baseUrl, String extension) {
         String[] parts = coords.split(":");
         if (parts.length != 3) {

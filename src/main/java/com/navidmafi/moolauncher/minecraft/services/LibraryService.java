@@ -15,6 +15,7 @@ public class LibraryService {
         var Libs = new ArrayList<JarAsset>();
         for (JsonNode lib : versionNode.get("libraries")) {
             if (!IsCompatible(lib)) continue;
+            String name = lib.get("name").asText();
             JsonNode downloadsNode = lib.path("downloads").path("artifact");
             if (downloadsNode.isMissingNode()) {
                 throw new RuntimeException("Artifact does not exist");
@@ -28,7 +29,8 @@ public class LibraryService {
                     StorageService.getLibrariesDirectory().resolve(artifactPath),
                     artifactSha1,
                     artifactUrl,
-                    AssetType.NON_NATIVE_LIBRARY);
+                    AssetType.NON_NATIVE_LIBRARY,
+                    MavenService.stripVersion(name));
             Libs.add(RL);
 
             JsonNode classifiers = lib.path("downloads").path("classifiers");
@@ -38,7 +40,7 @@ public class LibraryService {
                 String nativePath = nativeLibs.get("path").asText();
                 String nativeSha1 = nativeLibs.get("sha1").asText();
                 Path nativeOutPath = StorageService.getLibrariesDirectory().resolve(nativePath);
-                var NRL = new JarAsset(nativeOutPath, nativeSha1, nativeUrl, AssetType.NON_NATIVE_LIBRARY);
+                var NRL = new JarAsset(nativeOutPath, nativeSha1, nativeUrl, AssetType.NATIVE_LIBRARY, MavenService.stripVersion(name));
                 Libs.add(NRL);
             }
         }

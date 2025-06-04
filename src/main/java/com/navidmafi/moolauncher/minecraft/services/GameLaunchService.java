@@ -14,7 +14,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+
+import static com.navidmafi.moolauncher.minecraft.services.MavenService.stripVersion;
 
 public class GameLaunchService {
 
@@ -22,6 +26,7 @@ public class GameLaunchService {
     public static void launch(Config config, GameListener gameListener) throws IOException, InterruptedException {
         JsonMapper mapper = new JsonMapper();
         List<String> classpathEntries = new ArrayList<>();
+        Set<String> uniqueLibs = new LinkedHashSet<>();
 
         String mainClass = "net.minecraft.client.main.Main";
         Path mcDir = StorageService.getMCDirectory();
@@ -37,6 +42,7 @@ public class GameLaunchService {
             for (JarAsset lib : FabricService.GetFabricLibs(fabricManifestNode)){
                 System.out.println("Adding fabric lib " + lib.filePath + " to classpath");
                 classpathEntries.add(lib.filePath.toAbsolutePath().toString());
+                uniqueLibs.add(stripVersion(lib.groupID));
             }
             for (JarAsset jar : FabricService.GetFabricMainJars(fabricManifestNode)){
                 System.out.println("Adding fabric jar " + jar.filePath + " to classpath");
@@ -54,6 +60,7 @@ public class GameLaunchService {
        JsonNode versionManifestNode = mapper.readTree(versionManifest);
        for (JarAsset lib : LibraryService.GetCompatibleLibs(versionManifestNode)){
            if (lib.assetType != AssetType.NON_NATIVE_LIBRARY) continue;
+           if (uniqueLibs.contains(stripVersion(lib.groupID))) continue;
            classpathEntries.add(lib.filePath.toAbsolutePath().toString());
        }
 

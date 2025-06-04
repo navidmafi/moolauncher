@@ -26,27 +26,30 @@ public class FabricService {
             String baseUrl = libNode.path("url").asText();
             assets.add(
                     new JarAsset(
-                            StorageService.getLibrariesDirectory().resolve(MavenUrlMapper.toRelativePath(libName)),
+                            StorageService.getLibrariesDirectory().resolve(MavenService.toRelativePath(libName)),
                             libNode.get("sha1").asText(),
-                            MavenUrlMapper.toMavenUrl(libName,baseUrl,"jar"),
-                            AssetType.MISC_ASSET
+                            MavenService.toMavenUrl(libName,baseUrl,"jar"),
+                            AssetType.MISC_ASSET,
+                            MavenService.stripVersion(libName)
                     )
             );
         }
         return assets;
     }
 
-    public static JarAsset GetMavenAsset(String mavenID) throws IOException, InterruptedException {
+    public static JarAsset GetMavenAsset(String mavenCoord) throws IOException, InterruptedException {
         String baseUrl = "https://maven.fabricmc.net/";
-        String sha1Url = MavenUrlMapper.toMavenUrl(mavenID, baseUrl, "jar.sha1");
-        String jarUrl = MavenUrlMapper.toMavenUrl(mavenID, baseUrl, "jar");
+        String sha1Url = MavenService.toMavenUrl(mavenCoord, baseUrl, "jar.sha1");
+        String jarUrl = MavenService.toMavenUrl(mavenCoord, baseUrl, "jar");
         String sha1 = NetworkingService.httpGetAsString(sha1Url);
-        Path downloadRelativePath = MavenUrlMapper.toRelativePath(mavenID);
+        Path downloadRelativePath = MavenService.toRelativePath(mavenCoord);
         return new JarAsset(
                 StorageService.getLibrariesDirectory().resolve(downloadRelativePath),
                 sha1,
                 jarUrl,
-                AssetType.MISC_ASSET
+                AssetType.MISC_ASSET,
+                MavenService.stripVersion(mavenCoord)
+
         );
 
     }

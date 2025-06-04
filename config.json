@@ -3,5 +3,5 @@
   "version" : "1.21.4",
   "heapSize" : "2G",
   "useFabric" : true,
-  "fabricVersion" : "0.16.4"
+  "fabricVersion" : "0.16.14"
 }
