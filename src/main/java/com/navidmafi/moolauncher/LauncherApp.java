@@ -6,7 +6,6 @@ import com.navidmafi.moolauncher.config.Storage;
 import com.navidmafi.moolauncher.listener.GameListener;
 import com.navidmafi.moolauncher.listener.InstallListener;
 import com.navidmafi.moolauncher.listener.SwingProgressListener;
-import com.navidmafi.moolauncher.minecraft.model.LaunchConfig;
 import com.navidmafi.moolauncher.minecraft.services.GameLaunchService;
 import com.navidmafi.moolauncher.minecraft.services.InstallationService;
 
@@ -16,7 +15,6 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
 
 public class LauncherApp {
 
@@ -26,10 +24,16 @@ public class LauncherApp {
     private TextPrompt usernamePrompt;
     private JTextField versionField;
     private TextPrompt versionPrompt;
+    private JTextField heapSizeField;
+    private TextPrompt heapSizePrompt;
+    private JCheckBox useFabricCheckBox;
+    private JTextField fabricVersionField;
+    private TextPrompt fabricVersionPrompt;
     private JButton playButton;
     private JProgressBar progressBar;
     private JLabel statusLabel;
     private Config config;
+    private Storage storage = new Storage();
 
 
     public LauncherApp() {
@@ -37,7 +41,7 @@ public class LauncherApp {
     }
 
     private void createAndShowGUI() {
-        this.config = Storage.readConfig();
+        this.config = storage.readConfig();
         initFrame();
         initComponents();
         layoutComponents();
@@ -51,7 +55,7 @@ public class LauncherApp {
         frame = new JFrame("MooLauncher");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        Dimension dimension = new Dimension(400, 400);
+        Dimension dimension = new Dimension(400, 450);
         frame.setSize(dimension);
         frame.setMinimumSize(dimension);
         frame.setMaximumSize(dimension);
@@ -68,6 +72,15 @@ public class LauncherApp {
         versionPrompt = new TextPrompt("Version", versionField);
         versionPrompt.changeAlpha(0.5f);
 
+        heapSizeField = new JTextField();
+        heapSizePrompt = new TextPrompt("Heap size", heapSizeField);
+        heapSizePrompt.changeAlpha(0.5f);
+
+        useFabricCheckBox = new JCheckBox("Fabric");
+        fabricVersionField = new JTextField();
+        fabricVersionPrompt = new TextPrompt("Fabric Version", fabricVersionField);
+        fabricVersionPrompt.changeAlpha(0.5f);
+
         playButton = new JButton("Play");
         playButton.setBackground(new Color(39, 23, 231));
         playButton.setForeground(Color.WHITE);
@@ -83,6 +96,9 @@ public class LauncherApp {
 
         usernameField.setText(config.username);
         versionField.setText(config.version);
+        heapSizeField.setText(config.heapSize);
+        useFabricCheckBox.setSelected(config.useFabric);
+        fabricVersionField.setText(config.fabricVersion);
     }
 
     private void layoutComponents() {
@@ -94,31 +110,39 @@ public class LauncherApp {
         JLabel imageLabel = loadLogoLabel();
         content.add(imageLabel, BorderLayout.NORTH);
 
-        // ----- CENTER: inputs + button
         JPanel centerPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(6, 6, 6, 6);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
 
-        // Username field
-        gbc.gridx = 1;
+
+        gbc.gridx = 0;
         gbc.gridy = 0;
-        gbc.gridwidth = 2;
         centerPanel.add(usernameField, gbc);
 
-        // Version field
         gbc.gridx = 1;
-        gbc.gridy = 1;
-        gbc.gridwidth = 2;
         centerPanel.add(versionField, gbc);
 
-        // Play button spans all three columns
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.gridwidth = 3;
-        centerPanel.add(playButton, gbc);
 
+        gbc.gridx =0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 2;
+        centerPanel.add(heapSizeField, gbc);
+
+        gbc.gridy = 2;
+        gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        centerPanel.add(useFabricCheckBox, gbc);
+        gbc.gridx = 1;
+
+        centerPanel.add(fabricVersionField, gbc);
+
+
+        gbc.gridx = 0;
+        gbc.gridy = 4;
+        gbc.gridwidth = 2;
+        centerPanel.add(playButton, gbc);
         content.add(centerPanel, BorderLayout.CENTER);
 
         // ----- SOUTH: progress + status
@@ -170,7 +194,10 @@ public class LauncherApp {
 
         this.config.username = username;
         this.config.version = version;
-        Storage.saveConfig(config);
+        this.config.heapSize = heapSizeField.getText();
+        this.config.fabricVersion = fabricVersionField.getText();
+        this.config.useFabric = useFabricCheckBox.isSelected();
+        storage.saveConfig(config);
         SwingProgressListener swingProgressListener = new SwingProgressListener(
                 frame,
                 progressBar,
@@ -179,7 +206,6 @@ public class LauncherApp {
                 usernameField,
                 versionField
         );
-        var launchConfig = new LaunchConfig(username,version);
 
         var gameListener = new GameListener() {
             @Override
@@ -187,14 +213,14 @@ public class LauncherApp {
                 usernameField.setEnabled(true);
                 versionField.setEnabled(true);
                 playButton.setEnabled(true);
-                swingProgressListener.onProgress(0,"Game e xited with code " + exitCode);
+                swingProgressListener.onProgress(0,"Game exited with code " + exitCode);
             }
         };
         var installListener = new InstallListener() {
             public void onInstall() {
                 try {
                     swingProgressListener.onProgress(100,"Welcome to Minecraft.");
-                    GameLaunchService.launch(launchConfig,gameListener);
+                    GameLaunchService.launch(config,gameListener);
                 } catch (Exception e) {
                     swingProgressListener.onFailure(e.getMessage());
                 }
@@ -203,8 +229,12 @@ public class LauncherApp {
 
         new SwingWorker<Void, Void>() {
             @Override
-            protected Void doInBackground() throws Exception {
-                InstallationService.installVersion(version,swingProgressListener,installListener);
+            protected Void doInBackground() {
+                try {
+                    InstallationService.installVersion(config ,swingProgressListener,installListener);
+                } catch (Exception ex) {
+                    swingProgressListener.onFailure(ex.getMessage());
+                }
                 return null;
             }
         }.execute();

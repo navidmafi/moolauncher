@@ -2,6 +2,7 @@ package com.navidmafi.moolauncher.minecraft.services;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.navidmafi.moolauncher.config.Config;
 import com.navidmafi.moolauncher.downloader.DownloadJob;
 import com.navidmafi.moolauncher.downloader.DownloaderListener;
 import com.navidmafi.moolauncher.downloader.IDownloader;
@@ -9,31 +10,31 @@ import com.navidmafi.moolauncher.downloader.MTDownloader;
 import com.navidmafi.moolauncher.listener.InstallListener;
 import com.navidmafi.moolauncher.listener.SwingProgressListener;
 import com.navidmafi.moolauncher.minecraft.api.VersionApi;
-import com.navidmafi.moolauncher.util.OsUtils;
+import com.navidmafi.moolauncher.minecraft.domain.JarAsset;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.ArrayList;
 
 import static com.navidmafi.moolauncher.minecraft.services.StorageService.computeSha1;
 
 public class InstallationService {
 
     public static void installVersion(
-            String version,
+            Config config,
             SwingProgressListener swingProgressListener,
             InstallListener installListener
     ) throws Exception {
 
-        swingProgressListener.onProgress(0, "Preparing to install version: " + version);
 
-        StorageService.createDirectories(version);
+        swingProgressListener.onProgress(0, "Preparing to install version: " + config.version);
 
-        Path versionJsonPath = StorageService.getVersionJsonPath(version);
-        String versionJson = VersionApi.getVersionJson(version);
+        StorageService.createDirectories(config.version);
+
+        Path versionJsonPath = StorageService.getVersionJsonPath(config.version);
+        String versionJson = VersionApi.getVersionJson(config.version);
         System.out.println("[Installer] downloaded: version.json");
         Files.writeString(versionJsonPath, versionJson, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         System.out.println("[Installer] wrote " + versionJsonPath);
@@ -43,7 +44,7 @@ public class InstallationService {
             public void onFinished(IDownloader downloader) {
                 swingProgressListener.onProgress(100, "Extracting Native Libraries");
                 try {
-                    StorageService.extractNatives(version);
+                    StorageService.extractNatives(config.version);
                     swingProgressListener.onProgress(100, "Installed Native Libraries");
                     installListener.onInstall();
                 } catch (IOException e) {
@@ -61,113 +62,66 @@ public class InstallationService {
         };
         IDownloader downloader = new MTDownloader(8, 5, downloaderListener);
 
+        var AllAssets = new ArrayList<JarAsset>();
+
+
         ObjectMapper objectMapper = new ObjectMapper();
         JsonNode versionNode = objectMapper.readTree(versionJson);
-        JsonNode clientNode = versionNode.path("downloads").path("client");
-        if (clientNode.isMissingNode()) {
-            throw new RuntimeException("No client JAR in version.json");
-        }
-        String clientJarUrl = clientNode.get("url").asText();
-        String clientSha1 = clientNode.get("sha1").asText();
-        Path clientJarOut = StorageService.getVersionJarPath(version);
-        if (needsDownload(clientJarOut, clientSha1)) {
-            downloader.add(new DownloadJob(clientJarUrl, clientJarOut));
-        }
+        AllAssets.add(AssetService.GetMainClient(versionNode));
+        AllAssets.addAll(LibraryService.GetCompatibleLibs(versionNode));
 
 
-        JsonNode assetIndexNode = versionNode.path("assetIndex");
-        if (assetIndexNode.isMissingNode()) {
+        JsonNode assetIndexMetaNode = versionNode.path("assetIndex");
+        if (assetIndexMetaNode.isMissingNode()) {
             throw new RuntimeException("Asset index does not exist");
         }
-        String assetIndexUrl = assetIndexNode.get("url").asText();
-        Path assetIndexFile = StorageService.getAssetIndexPath(version);
+        String assetIndexUrl = assetIndexMetaNode.get("url").asText();
+        Path assetIndexFile = StorageService.getAssetIndexPath(config.version);
         String assetIndex = NetworkingService.httpGetAsString(assetIndexUrl);
         Files.writeString(assetIndexFile, assetIndex, StandardOpenOption.CREATE);
 
-        JsonNode assetIndexRootNode = objectMapper.readTree(assetIndex);
-        Iterator<Map.Entry<String, JsonNode>> fields = assetIndexRootNode.path("objects").fields();
-        while (fields.hasNext()) {
-            Map.Entry<String, JsonNode> entry = fields.next();
-            String hash = entry.getValue().get("hash").asText(); // 40‐char SHA1
-            String prefix = hash.substring(0, 2);
-            String assetUrl = "https://resources.download.minecraft.net/" + prefix + "/" + hash;
-            Path outPath = StorageService.getAssetsDirectory()
-                    .resolve("objects").resolve(prefix).resolve(hash);
-            if (needsDownload(outPath, hash)) {
-                downloader.add(new DownloadJob(assetUrl, outPath));
-            }
-        }
+        JsonNode assetIndexNode = objectMapper.readTree(assetIndex);
+        AllAssets.addAll(AssetService.ExtractMCAssets(assetIndexNode));
 
-        for (JsonNode lib : versionNode.get("libraries")) {
-            if (lib.has("rules")) {
-                boolean allowed = false;
-                for (JsonNode rule : lib.get("rules")) {
-                    String action = rule.get("action").asText();
-                    JsonNode osNode = rule.get("os");
-                    if (osNode == null) {
-                        // applies to all OS
-                        allowed = "allow".equals(action);
-                    } else if (OsUtils.getMojangOsName().equals(osNode.get("name").asText())) {
-                        allowed = "allow".equals(action);
-                    }
-                }
-                if (!allowed) {
-                    // Skip this library
-                    continue;
+        if (config.useFabric) {
+            String manifestUrl =
+                    "https://meta.fabricmc.net/v2/versions/loader/"
+                            + config.version + "/" + config.fabricVersion;
+            String manifestJson = NetworkingService.httpGetAsString(manifestUrl);
+            String loaderFullVersionString = "fabric-loader-"+config.fabricVersion+"-"+config.version;
+            Path fabricVerJson = StorageService.getVersionJsonPath(loaderFullVersionString);
+            Files.createDirectories(fabricVerJson.getParent());
+            Files.writeString(
+                    fabricVerJson,
+                    manifestJson,
+                    StandardOpenOption.CREATE
+            );
+            JsonNode manifestNode = objectMapper.readTree(manifestJson);
+            AllAssets.addAll(FabricService.GetFabricMainJars(manifestNode));
+            AllAssets.addAll(FabricService.GetFabricLibs(manifestNode));
+       }
+        AllAssets.forEach(asset -> {
+            if (needsDownload(asset)) {
+                try {
+                    Files.createDirectories(asset.filePath.getParent());
+                    downloader.add(new DownloadJob(asset.downloadURL, asset.filePath));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
             }
-
-            JsonNode downloadsNode = lib.path("downloads").path("artifact");
-            if (downloadsNode.isMissingNode()) {
-                throw new RuntimeException("Artifact does not exist");
-            }
-            String artifactUrl = downloadsNode.get("url").asText();
-            String artifactPath = downloadsNode.get("path").asText();
-            String artifactSha1 = downloadsNode.get("sha1").asText();
-            Path libOutPath = StorageService.getLibrariesDirectory().resolve(artifactPath);
-            if (needsDownload(libOutPath, artifactSha1)) {
-                downloader.add(new DownloadJob(artifactUrl, libOutPath));
-            }
-
-
-            JsonNode loggingNode = versionNode.path("logging").path("client");
-            if (loggingNode.isMissingNode()) {
-                throw new RuntimeException("Logging does not exist");
-            }
-            String logConfigUrl = loggingNode.path("file").get("url").asText();
-            Path logConfigFile = StorageService.getLoggingConfigPath(version);
-            MTDownloader.downloadFile(new DownloadJob(logConfigUrl, logConfigFile));
-
-
-            // 5b.iii. Natives
-            JsonNode classifiers = lib.path("downloads").path("classifiers");
-            JsonNode nativeLibs = (classifiers != null) ? classifiers.get(OsUtils.getNativeClassifier()) : null;
-            if (nativeLibs != null) {
-                String nativeUrl = nativeLibs.get("url").asText();
-                String nativePath = nativeLibs.get("path").asText();
-                String nativeSha1 = nativeLibs.get("sha1").asText();
-                Path nativeOutPath = StorageService.getLibrariesDirectory().resolve(nativePath);
-
-                if (needsDownload(nativeOutPath, nativeSha1)) {
-                    downloader.add(new DownloadJob(nativeUrl, nativeOutPath));
-                }
-            }
-        }
-
+        });
         downloader.start();
 
     }
 
-    private static boolean needsDownload(Path path, String expectedSha1) {
+
+    private static boolean needsDownload(JarAsset asset) {
         try {
-            if (Files.exists(path)) {
-                String actualSha1 = computeSha1(path);
-                return !actualSha1.equalsIgnoreCase(expectedSha1);
-            } else {
-                return true;
-            }
+            if (!Files.exists(asset.filePath)) return true;
+            String actualSha1 = computeSha1(asset.filePath);
+            return !actualSha1.equalsIgnoreCase(asset.sha1);
+
         } catch (IOException e) {
-            // If something goes wrong while reading or hashing, force re-download
             return true;
         }
     }

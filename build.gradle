@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 group = 'com.navidmafi'
@@ -30,4 +31,11 @@ sourceSets {
             include '**/*'
         }
     }
+}
+
+shadowJar {
+    archiveBaseName.set('moolauncher')
+    archiveClassifier.set('all')
+    archiveVersion.set(version)
+    mergeServiceFiles()
 }

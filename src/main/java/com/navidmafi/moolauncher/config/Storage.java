@@ -1,34 +1,31 @@
 package com.navidmafi.moolauncher.config;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.File;
 import java.io.IOException;
-import java.util.Properties;
 
 public class Storage {
-    public static void saveConfig(Config config) throws RuntimeException {
-        Properties props = new Properties();
-        props.setProperty("username", config.username);
-        props.setProperty("version", config.version);
+    ObjectMapper mapper = new ObjectMapper(); // or use GSON
 
-        try (FileOutputStream out = new FileOutputStream("config.ini")) {
-            props.store(out, "App Config");
-        } catch (Exception e) {
+    public void saveConfig(Config config) {
+        try {
+            mapper.writerWithDefaultPrettyPrinter().writeValue(new File("config.json"), config);
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static Config readConfig() {
-        Properties props = new Properties();
-
-        try (FileInputStream in = new FileInputStream("config.ini")) {
-            props.load(in);
-        } catch (IOException ignored) {
+    public Config readConfig() {
+        try {
+            return mapper.readValue(new File("config.json"), Config.class);
+        } catch (IOException e) {
+            var defaultConfig = new Config();
+            defaultConfig.heapSize = "2G";
+            defaultConfig.useFabric = false;
+            return defaultConfig;
         }
-
-        String username = props.getProperty("username"); // default: null
-        String version = props.getProperty("version");
-        return new Config(username, version);
     }
+
 
 }
