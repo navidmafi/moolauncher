@@ -1,2 +1,6 @@
 .minecraft
 build
+config.ini
+config.json
+*.jar
+.gradle
