@@ -8,6 +8,7 @@ public class Bootstrap {
     public static void main(String[] args) {
         // 1) Configure L&F
         System.setProperty("flatlaf.uiScale", "1.5");
+        System.setProperty("java.net.useSystemProxies", "true");
         FlatLightLaf.install();
         SwingUtilities.invokeLater(LauncherApp::new);
     }

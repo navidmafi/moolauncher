@@ -7,9 +7,23 @@ import com.navidmafi.moolauncher.minecraft.services.NetworkingService;
 import com.navidmafi.moolauncher.minecraft.exceptions.VersionNotFoundException;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 public class VersionApi {
+
+    public static List<String> getVersionIds() throws IOException, InterruptedException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        String manifestJson = NetworkingService.httpGetAsString(AppConstants.PISTON_URL);
+        JsonNode manifestNode = objectMapper.readTree(manifestJson);
+
+        List<String> ids = new ArrayList<>();
+        for (JsonNode v : manifestNode.get("versions")) {
+            ids.add(v.get("id").asText());
+        }
+        return ids;
+    }
 
     public static String getVersionJson(String version) throws IOException, InterruptedException, VersionNotFoundException {
         ObjectMapper objectMapper = new ObjectMapper();

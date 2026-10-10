@@ -6,8 +6,11 @@ import com.navidmafi.moolauncher.config.Storage;
 import com.navidmafi.moolauncher.listener.GameListener;
 import com.navidmafi.moolauncher.listener.InstallListener;
 import com.navidmafi.moolauncher.listener.SwingProgressListener;
+import com.navidmafi.moolauncher.minecraft.api.VersionApi;
+import com.navidmafi.moolauncher.minecraft.services.FabricService;
 import com.navidmafi.moolauncher.minecraft.services.GameLaunchService;
 import com.navidmafi.moolauncher.minecraft.services.InstallationService;
+import com.navidmafi.moolauncher.minecraft.services.StorageService;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -15,6 +18,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 
 public class LauncherApp {
 
@@ -22,13 +26,12 @@ public class LauncherApp {
     private JFrame frame;
     private JTextField usernameField;
     private TextPrompt usernamePrompt;
-    private JTextField versionField;
-    private TextPrompt versionPrompt;
+    private JComboBox<String> versionComboBox;
     private JTextField heapSizeField;
     private TextPrompt heapSizePrompt;
     private JCheckBox useFabricCheckBox;
-    private JTextField fabricVersionField;
-    private TextPrompt fabricVersionPrompt;
+    private JCheckBox launchOfflineCheckBox;
+    private JComboBox<String> fabricVersionComboBox;
     private JButton playButton;
     private JProgressBar progressBar;
     private JLabel statusLabel;
@@ -68,18 +71,17 @@ public class LauncherApp {
         usernamePrompt = new TextPrompt("Username", usernameField);
         usernamePrompt.changeAlpha(0.5f);
 
-        versionField = new JTextField();
-        versionPrompt = new TextPrompt("Version", versionField);
-        versionPrompt.changeAlpha(0.5f);
+        versionComboBox = new JComboBox<>();
+        versionComboBox.setEditable(true);
 
         heapSizeField = new JTextField();
         heapSizePrompt = new TextPrompt("Heap size", heapSizeField);
         heapSizePrompt.changeAlpha(0.5f);
 
         useFabricCheckBox = new JCheckBox("Fabric");
-        fabricVersionField = new JTextField();
-        fabricVersionPrompt = new TextPrompt("Fabric Version", fabricVersionField);
-        fabricVersionPrompt.changeAlpha(0.5f);
+        launchOfflineCheckBox = new JCheckBox("Offline");
+        fabricVersionComboBox = new JComboBox<>();
+        fabricVersionComboBox.setEditable(true);
 
         playButton = new JButton("Play");
         playButton.setBackground(new Color(39, 23, 231));
@@ -95,10 +97,95 @@ public class LauncherApp {
         statusLabel.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
 
         usernameField.setText(config.username);
-        versionField.setText(config.version);
+        if (config.version != null && !config.version.isBlank()) {
+            versionComboBox.addItem(config.version);
+        }
+        versionComboBox.setSelectedItem(config.version);
         heapSizeField.setText(config.heapSize);
         useFabricCheckBox.setSelected(config.useFabric);
-        fabricVersionField.setText(config.fabricVersion);
+        launchOfflineCheckBox.setSelected(config.launchOffline);
+        if (config.fabricVersion != null && !config.fabricVersion.isBlank()) {
+            fabricVersionComboBox.addItem(config.fabricVersion);
+        }
+        fabricVersionComboBox.setSelectedItem(config.fabricVersion);
+
+        loadVersionList();
+        loadFabricVersionList(config.version);
+    }
+
+    private void loadVersionList() {
+        new SwingWorker<List<String>, Void>() {
+            @Override
+            protected List<String> doInBackground() throws Exception {
+                return VersionApi.getVersionIds();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    List<String> versions = get();
+                    String current = (String) versionComboBox.getEditor().getItem();
+                    versionComboBox.removeAllItems();
+                    for (String v : versions) {
+                        versionComboBox.addItem(v);
+                    }
+                    if (current != null && !current.isBlank()) {
+                        versionComboBox.setSelectedItem(current);
+                    }
+                } catch (Exception e) {
+                    System.out.println("[Launcher] Could not fetch version list: " + e);
+                    statusLabel.setText("Version fetch failed");
+                    launchOfflineCheckBox.setSelected(true);
+
+                    String current = (String) versionComboBox.getEditor().getItem();
+                    versionComboBox.removeAllItems();
+                    for (String v : StorageService.listInstalledVersions()) {
+                        versionComboBox.addItem(v);
+                    }
+                    if (current != null && !current.isBlank()) {
+                        versionComboBox.setSelectedItem(current);
+                    }
+                }
+            }
+        }.execute();
+    }
+
+    private void loadFabricVersionList(String mcVersion) {
+        if (mcVersion == null || mcVersion.isBlank()) return;
+        new SwingWorker<List<String>, Void>() {
+            @Override
+            protected List<String> doInBackground() throws Exception {
+                return FabricService.GetLoaderVersions(mcVersion);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    List<String> loaderVersions = get();
+                    String current = (String) fabricVersionComboBox.getEditor().getItem();
+                    fabricVersionComboBox.removeAllItems();
+                    for (String v : loaderVersions) {
+                        fabricVersionComboBox.addItem(v);
+                    }
+                    if (current != null && !current.isBlank()) {
+                        fabricVersionComboBox.setSelectedItem(current);
+                    }
+                } catch (Exception e) {
+                    System.out.println("[Launcher] Could not fetch fabric loader list for " + mcVersion + ": " + e);
+                    statusLabel.setText("Version fetch failed");
+                    launchOfflineCheckBox.setSelected(true);
+
+                    String current = (String) fabricVersionComboBox.getEditor().getItem();
+                    fabricVersionComboBox.removeAllItems();
+                    for (String v : StorageService.listInstalledFabricLoaderVersions(mcVersion)) {
+                        fabricVersionComboBox.addItem(v);
+                    }
+                    if (current != null && !current.isBlank()) {
+                        fabricVersionComboBox.setSelectedItem(current);
+                    }
+                }
+            }
+        }.execute();
     }
 
     private void layoutComponents() {
@@ -122,7 +209,7 @@ public class LauncherApp {
         centerPanel.add(usernameField, gbc);
 
         gbc.gridx = 1;
-        centerPanel.add(versionField, gbc);
+        centerPanel.add(versionComboBox, gbc);
 
 
         gbc.gridx =0;
@@ -136,7 +223,14 @@ public class LauncherApp {
         centerPanel.add(useFabricCheckBox, gbc);
         gbc.gridx = 1;
 
-        centerPanel.add(fabricVersionField, gbc);
+        centerPanel.add(fabricVersionComboBox, gbc);
+
+        gbc.gridy = 3;
+        gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        centerPanel.add(launchOfflineCheckBox, gbc);
+        gbc.gridx = 1;
+
 
 
         gbc.gridx = 0;
@@ -171,12 +265,17 @@ public class LauncherApp {
 
     private void attachListeners() {
         playButton.addActionListener(this::onPlayClicked);
+        versionComboBox.addActionListener(e -> {
+            String selectedVersion = (String) versionComboBox.getEditor().getItem();
+            loadFabricVersionList(selectedVersion == null ? null : selectedVersion.trim());
+        });
     }
 
 
     private void onPlayClicked(ActionEvent e) {
         String username = usernameField.getText().trim();
-        String version = versionField.getText().trim();
+        Object versionItem = versionComboBox.getEditor().getItem();
+        String version = versionItem == null ? "" : versionItem.toString().trim();
 
         if (username.isEmpty() || version.isEmpty()) {
             JOptionPane.showMessageDialog(
@@ -189,14 +288,18 @@ public class LauncherApp {
         }
 
         usernameField.setEnabled(false);
-        versionField.setEnabled(false);
+        versionComboBox.setEnabled(false);
         playButton.setEnabled(false);
+
+        Object fabricVersionItem = fabricVersionComboBox.getEditor().getItem();
+        String fabricVersion = fabricVersionItem == null ? "" : fabricVersionItem.toString().trim();
 
         this.config.username = username;
         this.config.version = version;
         this.config.heapSize = heapSizeField.getText();
-        this.config.fabricVersion = fabricVersionField.getText();
+        this.config.fabricVersion = fabricVersion;
         this.config.useFabric = useFabricCheckBox.isSelected();
+        this.config.launchOffline = launchOfflineCheckBox.isSelected();
         storage.saveConfig(config);
         SwingProgressListener swingProgressListener = new SwingProgressListener(
                 frame,
@@ -204,40 +307,74 @@ public class LauncherApp {
                 statusLabel,
                 playButton,
                 usernameField,
-                versionField
+                versionComboBox
         );
+
+        swingProgressListener.onProgress(0,"Loading...");
+
 
         var gameListener = new GameListener() {
             @Override
             public void onExit(int exitCode) {
                 usernameField.setEnabled(true);
-                versionField.setEnabled(true);
+                versionComboBox.setEnabled(true);
                 playButton.setEnabled(true);
                 swingProgressListener.onProgress(0,"Game exited with code " + exitCode);
             }
+
+
+            @Override
+            public void onFailure(String errMessage) {
+                swingProgressListener.onFailure(errMessage);
+            }
+
+            @Override
+            public void onLaunch() {
+                usernameField.setEnabled(false);
+                versionComboBox.setEnabled(false);
+                playButton.setEnabled(false);
+                swingProgressListener.onProgress(100,"Welcome to Minecraft.");
+            }
         };
         var installListener = new InstallListener() {
-            public void onInstall() {
+            @Override
+            public void onFinished() {
                 try {
-                    swingProgressListener.onProgress(100,"Welcome to Minecraft.");
                     GameLaunchService.launch(config,gameListener);
                 } catch (Exception e) {
-                    swingProgressListener.onFailure(e.getMessage());
+                    swingProgressListener.onFailure(e.toString());
                 }
             }
+
+            @Override
+            public void onFailure(String errMessage) {
+                swingProgressListener.onFailure(errMessage);
+            }
+
+            @Override
+            public void onProgress(int Progress, String Message) {
+                swingProgressListener.onProgress(Progress,Message);
+            }
+
         };
 
         new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() {
                 try {
-                    InstallationService.installVersion(config ,swingProgressListener,installListener);
+                    if (config.launchOffline) {
+                        System.out.println("[Launcher] Offline Launch Requested");
+                        GameLaunchService.launch(config,gameListener);
+                    } else{
+                        System.out.println("[Launcher] Install Requested");
+                        InstallationService.installVersion(config ,installListener);
+                    }
                 } catch (Exception ex) {
-                    swingProgressListener.onFailure(ex.getMessage());
+                    swingProgressListener.onFailure(ex.toString());
                 }
                 return null;
             }
-        }.execute();
+        }.execute();;
 
     }
 }

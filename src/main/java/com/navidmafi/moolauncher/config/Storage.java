@@ -23,6 +23,7 @@ public class Storage {
             var defaultConfig = new Config();
             defaultConfig.heapSize = "2G";
             defaultConfig.useFabric = false;
+            defaultConfig.launchOffline = false;
             return defaultConfig;
         }
     }

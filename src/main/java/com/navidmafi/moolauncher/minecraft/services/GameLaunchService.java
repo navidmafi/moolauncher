@@ -7,9 +7,9 @@ import com.navidmafi.moolauncher.config.Config;
 import com.navidmafi.moolauncher.listener.GameListener;
 import com.navidmafi.moolauncher.minecraft.domain.AssetType;
 import com.navidmafi.moolauncher.minecraft.domain.JarAsset;
-import com.navidmafi.moolauncher.util.OsUtils;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,18 +41,25 @@ public class GameLaunchService {
             JsonNode fabricManifestNode = mapper.readTree(fabricManifest);
             for (JarAsset lib : FabricService.GetFabricLibs(fabricManifestNode)){
                 System.out.println("Adding fabric lib " + lib.filePath + " to classpath");
+                if (InstallationService.NeedsDownload(lib)) {
+                    throw  new FileNotFoundException("Asset " + lib.filePath +  " requires re-downloading.");
+                }
                 classpathEntries.add(lib.filePath.toAbsolutePath().toString());
                 uniqueLibs.add(stripVersion(lib.groupID));
             }
-            for (JarAsset jar : FabricService.GetFabricMainJars(fabricManifestNode)){
+            System.out.println("[GameLaunchService] All libs present");
+            for (JarAsset jar : FabricService.GetFabricMainJars(fabricManifestNode, config.launchOffline)){
                 System.out.println("Adding fabric jar " + jar.filePath + " to classpath");
+                if (InstallationService.NeedsDownload(jar)) {
+                    throw  new FileNotFoundException("Asset " + jar.filePath +  " requires re-downloading.");
+                }
                 classpathEntries.add(jar.filePath.toAbsolutePath().toString());
             }
+            System.out.println("[GameLaunchService] All jars present");
 
             mainClass = fabricManifestNode.path("launcherMeta").path("mainClass").path("client").asText();
 
         }
-
 
 
         Path versionManifestPath = StorageService.getVersionJsonPath(config.version);
@@ -60,9 +67,23 @@ public class GameLaunchService {
        JsonNode versionManifestNode = mapper.readTree(versionManifest);
        for (JarAsset lib : LibraryService.GetCompatibleLibs(versionManifestNode)){
            if (lib.assetType != AssetType.NON_NATIVE_LIBRARY) continue;
+           if (InstallationService.NeedsDownload(lib)) {
+               throw  new FileNotFoundException("Asset " + lib.filePath +  " requires re-downloading.");
+           }
            if (uniqueLibs.contains(stripVersion(lib.groupID))) continue;
            classpathEntries.add(lib.filePath.toAbsolutePath().toString());
        }
+
+        var assetIndexPath = StorageService.getAssetIndexPath(config.version);
+        String assetIndex = Files.readString(assetIndexPath);
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonNode assetIndexNode = objectMapper.readTree(assetIndex);
+        var gameAssets = (AssetService.ExtractMCAssets(assetIndexNode));
+        for (JarAsset asset :gameAssets){
+            if (InstallationService.NeedsDownload(asset)) {
+                throw  new FileNotFoundException("Asset " + asset.filePath +  " requires re-downloading.");
+            }
+        }
 
         Path versionJarPath = versionDir.resolve(config.version + ".jar");
         classpathEntries.add(versionJarPath.toAbsolutePath().toString());
@@ -101,7 +122,7 @@ public class GameLaunchService {
         pb.inheritIO(); // forward stdout/stderr to current console
         Process proc = pb.start();
 
-//        gameListener.onLaunch();
+        gameListener.onLaunch();
 
         int exitCode = proc.waitFor();
         System.out.println("[*] Minecraft exited with code " + exitCode);

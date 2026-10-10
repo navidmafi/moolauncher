@@ -5,6 +5,7 @@ public class Config {
     public String version = null;
     public String heapSize = "2G";
     public boolean useFabric = false;
+    public boolean launchOffline = false;
     public String fabricVersion = null;
 }
 

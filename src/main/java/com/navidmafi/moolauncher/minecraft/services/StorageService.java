@@ -5,14 +5,17 @@ import com.navidmafi.moolauncher.util.OsUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Formatter;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -102,11 +105,62 @@ public class StorageService {
 
     /**
      * “.minecraft/versions/<version>/<version>-client-logging.json”
-     * (You could pick any naming convention; this is consistent with what the launcher expects.)
      */
     public static Path getLoggingConfigPath(String version) throws IOException {
         Path versionDir = getVersionDirectory(version);
         return versionDir.resolve(version + "-client-logging.json");
+    }
+
+    /**
+     * Lists the vanilla versions already installed on disk, i.e. subdirectories
+     * of ".minecraft/versions" that contain a matching "<version>.jar".
+     */
+    public static List<String> listInstalledVersions() {
+        List<String> versions = new ArrayList<>();
+        Path versionsDir = getVersionsDirectory();
+        if (!Files.isDirectory(versionsDir)) return versions;
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(versionsDir)) {
+            for (Path entry : stream) {
+                if (!Files.isDirectory(entry)) continue;
+                String name = entry.getFileName().toString();
+                if (Files.exists(getVersionJarPath(name))) {
+                    versions.add(name);
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("[StorageService] Could not list installed versions: " + e);
+        }
+        return versions;
+    }
+
+    /**
+     * Lists the Fabric loader versions already installed for a given Minecraft
+     * version, i.e. "fabric-loader-<loaderVersion>-<mcVersion>" directories
+     * under ".minecraft/versions".
+     */
+    public static List<String> listInstalledFabricLoaderVersions(String mcVersion) {
+        List<String> loaderVersions = new ArrayList<>();
+        Path versionsDir = getVersionsDirectory();
+        if (!Files.isDirectory(versionsDir) || mcVersion == null || mcVersion.isBlank()) return loaderVersions;
+
+        String prefix = "fabric-loader-";
+        String suffix = "-" + mcVersion;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(versionsDir)) {
+            for (Path entry : stream) {
+                if (!Files.isDirectory(entry)) continue;
+                String name = entry.getFileName().toString();
+                if (name.startsWith(prefix) && name.endsWith(suffix)) {
+                    String loaderVersion = name.substring(prefix.length(), name.length() - suffix.length());
+                    if (!loaderVersion.isEmpty()) {
+                        loaderVersions.add(loaderVersion);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("[StorageService] Could not list installed fabric loader versions: " + e);
+        }
+        return loaderVersions;
     }
 
     public static void createDirectories(String version) throws IOException {

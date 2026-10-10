@@ -1,0 +1,4 @@
+Offline mode
+auto fabric 
+selectable versions
+auto IRIS

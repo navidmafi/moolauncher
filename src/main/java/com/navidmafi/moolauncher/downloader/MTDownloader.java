@@ -3,9 +3,10 @@ package com.navidmafi.moolauncher.downloader;
 import java.io.BufferedInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URL;
+import java.net.*;
 import java.nio.file.Files;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -109,20 +110,34 @@ public class MTDownloader implements IDownloader {
 
     public static void downloadFile(DownloadJob job) throws IOException {
         URL url = new URL(job.getUrl());
-
         Files.createDirectories(job.getPath().getParent());
 
+        Proxy proxy = Proxy.NO_PROXY;
+        ProxySelector selector = ProxySelector.getDefault();
+        if (selector != null) {
+            List<Proxy> proxies = selector.select(URI.create(job.getUrl()));
+            if (proxies != null && !proxies.isEmpty()) {
+                proxy = proxies.get(0);
+            }
+        }
+
+        URLConnection conn = (proxy == Proxy.NO_PROXY)
+                ? url.openConnection()
+                : url.openConnection(proxy);
+
         try (
-                BufferedInputStream in = new BufferedInputStream(url.openStream());
+                BufferedInputStream in = new BufferedInputStream(conn.getInputStream());
                 FileOutputStream fileOut = new FileOutputStream(job.getPath().toFile())
         ) {
-            byte[] buffer = new byte[1024];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer, 0, buffer.length)) != -1) {
-                fileOut.write(buffer, 0, bytesRead);
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = in.read(buffer)) != -1) {
+                fileOut.write(buffer, 0, n);
             }
         }
     }
+
+
 
     public void stop() {
         if (executor != null && !executor.isShutdown()) {

@@ -8,7 +8,7 @@ public class SwingProgressListener {
     private final JButton playButton;
     private final JFrame frame;
     private final JTextField usernameField;
-    private final JTextField versionField;
+    private final JComponent versionField;
 
     public SwingProgressListener(
             JFrame frame,
@@ -16,7 +16,7 @@ public class SwingProgressListener {
             JLabel statusLabel,
             JButton playButton,
             JTextField usernameField,
-            JTextField versionField
+            JComponent versionField
     ) {
         this.frame = frame;
         this.progressBar = progressBar;

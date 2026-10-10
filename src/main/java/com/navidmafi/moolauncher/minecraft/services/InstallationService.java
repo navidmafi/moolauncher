@@ -8,7 +8,6 @@ import com.navidmafi.moolauncher.downloader.DownloaderListener;
 import com.navidmafi.moolauncher.downloader.IDownloader;
 import com.navidmafi.moolauncher.downloader.MTDownloader;
 import com.navidmafi.moolauncher.listener.InstallListener;
-import com.navidmafi.moolauncher.listener.SwingProgressListener;
 import com.navidmafi.moolauncher.minecraft.api.VersionApi;
 import com.navidmafi.moolauncher.minecraft.domain.JarAsset;
 
@@ -24,16 +23,16 @@ public class InstallationService {
 
     public static void installVersion(
             Config config,
-            SwingProgressListener swingProgressListener,
             InstallListener installListener
     ) throws Exception {
 
 
-        swingProgressListener.onProgress(0, "Preparing to install version: " + config.version);
+        installListener.onProgress(0, "Preparing to install version: " + config.version);
 
         StorageService.createDirectories(config.version);
 
         Path versionJsonPath = StorageService.getVersionJsonPath(config.version);
+        System.out.println("[Installer] downloading: version.json");
         String versionJson = VersionApi.getVersionJson(config.version);
         System.out.println("[Installer] downloaded: version.json");
         Files.writeString(versionJsonPath, versionJson, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -42,22 +41,22 @@ public class InstallationService {
 
         DownloaderListener downloaderListener = new DownloaderListener() {
             public void onFinished(IDownloader downloader) {
-                swingProgressListener.onProgress(100, "Extracting Native Libraries");
+                installListener.onProgress(100, "Extracting Native Libraries");
                 try {
                     StorageService.extractNatives(config.version);
-                    swingProgressListener.onProgress(100, "Installed Native Libraries");
-                    installListener.onInstall();
+                    installListener.onProgress(100, "Installed Native Libraries");
+                    installListener.onFinished();
                 } catch (IOException e) {
-                    swingProgressListener.onFailure(e.getMessage());
+                    installListener.onFailure(e.toString());
                 }
             }
 
             public void onError(IDownloader downloader, Exception e) {
-                swingProgressListener.onFailure(e.getMessage());
+                installListener.onFailure(e.toString());
             }
 
             public void onProgress(IDownloader downloader, int progress) {
-                swingProgressListener.onProgress(progress, "Downloading " + downloader.remainingItems() + " files");
+                installListener.onProgress(progress, "Downloading " + downloader.remainingItems() + " files");
             }
         };
         IDownloader downloader = new MTDownloader(8, 5, downloaderListener);
@@ -87,6 +86,8 @@ public class InstallationService {
             String manifestUrl =
                     "https://meta.fabricmc.net/v2/versions/loader/"
                             + config.version + "/" + config.fabricVersion;
+            System.out.println("[Installer] downloading fabric manifest " + config.fabricVersion);
+
             String manifestJson = NetworkingService.httpGetAsString(manifestUrl);
             String loaderFullVersionString = "fabric-loader-"+config.fabricVersion+"-"+config.version;
             Path fabricVerJson = StorageService.getVersionJsonPath(loaderFullVersionString);
@@ -97,11 +98,11 @@ public class InstallationService {
                     StandardOpenOption.CREATE
             );
             JsonNode manifestNode = objectMapper.readTree(manifestJson);
-            AllAssets.addAll(FabricService.GetFabricMainJars(manifestNode));
+            AllAssets.addAll(FabricService.GetFabricMainJars(manifestNode,config.launchOffline));
             AllAssets.addAll(FabricService.GetFabricLibs(manifestNode));
        }
         AllAssets.forEach(asset -> {
-            if (needsDownload(asset)) {
+            if (NeedsDownload(asset)) {
                 try {
                     Files.createDirectories(asset.filePath.getParent());
                     downloader.add(new DownloadJob(asset.downloadURL, asset.filePath));
@@ -115,9 +116,10 @@ public class InstallationService {
     }
 
 
-    private static boolean needsDownload(JarAsset asset) {
+    public static boolean NeedsDownload(JarAsset asset) {
         try {
             if (!Files.exists(asset.filePath)) return true;
+            if (asset.skipVerify) return false;
             String actualSha1 = computeSha1(asset.filePath);
             return !actualSha1.equalsIgnoreCase(asset.sha1);
 
